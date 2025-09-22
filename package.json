@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Google Form Auto Filler with AI",
   "main": "server.js",
+  "bin": "server.js",
   "scripts": {
     "start": "node server.js",
     "start:headless": "cross-env BROWSER_MODE=headless node server.js",

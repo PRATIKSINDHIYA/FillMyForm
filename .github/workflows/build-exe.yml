@@ -27,7 +27,7 @@ jobs:
     
     - name: Build executable
       run: |
-        pkg . --targets node18-win-x64 --output fillmyform.exe
+        pkg server.js --targets node18-win-x64 --output fillmyform.exe
         echo "fillmyform.exe" > release-files.txt
     
     - name: Create release
