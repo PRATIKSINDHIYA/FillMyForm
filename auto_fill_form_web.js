@@ -64,7 +64,15 @@ Choose the best option. Reply only with the option text.
 async function runFormAutomation(url, apiKey) {
   const mode = process.env.BROWSER_MODE || 'cdp'; // 'cdp' | 'headless'
   const browser = mode === 'headless'
-    ? await chromium.launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'] })
+    ? await chromium.launch({ headless: true, args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+        '--no-zygote',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ] })
     : await chromium.connectOverCDP('http://localhost:9222'); // attach to running Chrome
   const existingContexts = browser.contexts();
   const context = existingContexts && existingContexts.length > 0
