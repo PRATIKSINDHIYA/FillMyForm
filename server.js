@@ -27,7 +27,7 @@ app.post('/check-key', async (req, res) => {
 });
 
 app.post('/submit', async (req, res) => {
-  const { url, apiKey } = req.body || {};
+  const { url, apiKey, mode } = req.body || {};
   if (!url) return res.status(400).json({ ok: false, error: 'Please provide a Google Form URL.' });
   if (!apiKey) return res.status(400).json({ ok: false, error: 'Please provide Gemini API key.' });
   try {
@@ -42,7 +42,7 @@ app.post('/submit', async (req, res) => {
   }
 
   try {
-    const result = await runFormAutomation(url, apiKey);
+    const result = await runFormAutomation(url, apiKey, mode);
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error(err);

@@ -37,22 +37,27 @@ Choose the best option. Reply only with the option text.
   `.trim();
 
   const ai = createAIClient(apiKey);
-  async function callOnce() {
-    return ai.models.generateContent({
-      model: "gemini-1.5-flash",
+  async function callOnceWithTimeout(timeoutMs) {
+    const p = ai.models.generateContent({
+      model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }]
     });
+    const to = new Promise((_, rej) => setTimeout(() => rej(new Error('AI request timed out')), timeoutMs));
+    return Promise.race([p, to]);
   }
   let result;
   try {
-    result = await callOnce();
+    result = await callOnceWithTimeout(15000);
   } catch (e) {
     const msg = e && e.message ? e.message : '';
     const m = msg.match(/Please retry in\s+(\d+(?:\.\d+)?)s/);
     if (e.status === 429 && m) {
-      const delayMs = Math.min(60000, Math.ceil(parseFloat(m[1]) * 1000));
-      await new Promise(r => setTimeout(r, delayMs));
-      result = await callOnce();
+      const delaySec = parseFloat(m[1]);
+      if (delaySec > 5) {
+        throw new Error('Gemini quota exceeded. Please wait and try again.');
+      }
+      await new Promise(r => setTimeout(r, Math.ceil(delaySec * 1000)));
+      result = await callOnceWithTimeout(15000);
     } else {
       throw e;
     }
@@ -61,8 +66,9 @@ Choose the best option. Reply only with the option text.
   return text;
 }
 
-async function runFormAutomation(url, apiKey) {
-  const mode = process.env.BROWSER_MODE || 'cdp'; // 'cdp' | 'headless'
+async function runFormAutomation(url, apiKey, modeOverride) {
+  const mode = modeOverride || process.env.BROWSER_MODE || 'headless'; // 'cdp' | 'headless'
+  console.log(`[automation] mode=${mode} url=${url}`);
   const browser = mode === 'headless'
     ? await chromium.launch({ headless: true, args: [
         '--no-sandbox',
@@ -73,16 +79,33 @@ async function runFormAutomation(url, apiKey) {
         '--no-zygote',
         '--disable-features=IsolateOrigins,site-per-process'
       ] })
-    : await chromium.connectOverCDP('http://localhost:9222'); // attach to running Chrome
+    : await chromium.connectOverCDP('http://127.0.0.1:9222').catch((e) => {
+        const tip = 'Cannot connect to Chrome. Start it with: "C\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe" --remote-debugging-port=9222';
+        const err = new Error((e && e.message) ? (e.message + ' | ' + tip) : tip);
+        err.name = 'ChromeConnectError';
+        throw err;
+      }); // attach to running Chrome
   const existingContexts = browser.contexts();
-  const context = existingContexts && existingContexts.length > 0
-    ? existingContexts[0]
-    : await browser.newContext();
-  const page = await context.newPage();
+  console.log(`[automation] contexts=${existingContexts.length}`);
+  let context;
+  let page;
+  if (mode === 'cdp') {
+    // Use the default existing context and open a tab there (same Chrome window)
+    context = existingContexts && existingContexts.length > 0 ? existingContexts[0] : await browser.newContext();
+    page = await context.newPage();
+  } else {
+    context = existingContexts && existingContexts.length > 0 ? existingContexts[0] : await browser.newContext();
+    page = await context.newPage();
+  }
+  console.log('[automation] new page opened');
   page.setDefaultTimeout(45000);
   page.setDefaultNavigationTimeout(45000);
-  await page.goto(url);
-  await page.waitForTimeout(2000);
+  await page.goto(url, { waitUntil: 'load' });
+  await Promise.race([
+    page.waitForLoadState('networkidle').catch(()=>{}),
+    page.waitForTimeout(4000)
+  ]);
+  try { await page.bringToFront(); } catch (_) {}
 
   // Handle Google consent/cookies if shown
   try {
@@ -100,13 +123,22 @@ async function runFormAutomation(url, apiKey) {
     (blocks) => {
       return blocks.map(block => {
         const qText = block.querySelector('[role="heading"]')?.innerText || "";
-        const opts = Array.from(block.querySelectorAll('label span'))
-          .map(el => el.innerText)
+        const radioOpts = Array.from(block.querySelectorAll('label span, div[role="radio"] span'))
+          .map(el => el.innerText || el.textContent || '')
+          .map(t => t.trim())
           .filter(Boolean);
-        return { question: qText, options: opts };
+        return { question: qText, options: Array.from(new Set(radioOpts)) };
       }).filter(q => q.question && q.options.length);
     }
   );
+
+  if (!questions.length) {
+    const requiresSignin = await page.$('text=/Sign in to Google to save your progress/i');
+    if (requiresSignin) {
+      throw new Error('Form requires Google sign-in. Please open while signed in.');
+    }
+    throw new Error('No multiple-choice questions detected. The form may use unsupported types or changed DOM.');
+  }
 
   for (const q of questions) {
     const ans = await askAI(q.question, q.options, apiKey);
@@ -128,7 +160,7 @@ async function runFormAutomation(url, apiKey) {
   
   await Promise.race([
     page.waitForURL('**/formResponse*', { timeout: 15000 }).catch(()=>{}),
-    page.waitForSelector('text=/Your response has been recorded/i', { timeout: 15000 }).catch(()=>{})
+    page.waitForSelector('text=/Your response has been recorded|Thanks for responding/i', { timeout: 15000 }).catch(()=>{})
   ]);
 
   if (mode === 'headless') {
@@ -144,7 +176,7 @@ async function checkGeminiKey(apiKey) {
   const ai = createAIClient(apiKey);
   try {
     const result = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [{ role: 'user', parts: [{ text: 'ping' }] }]
     });
     const text = extractTextFromGenAIResponse(result).trim();

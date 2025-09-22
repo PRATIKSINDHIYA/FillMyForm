@@ -58,6 +58,9 @@ a { color: #93c5fd; }
           <label class="subtle">Google Form URL</label>
           <input id="url" type="text" placeholder="https://docs.google.com/forms/.../viewform" required>
         </div>
+        <div>
+          <label class="subtle"><input type="checkbox" id="openInChrome"> Open in my Chrome tab (advanced)</label>
+        </div>
         <div class="actions">
           <input id="submitBtn" type="submit" value="Fill Form" disabled>
         </div>
@@ -86,6 +89,7 @@ const checkBtn = document.getElementById('checkBtn');
 const form = document.getElementById('form');
 const urlInput = document.getElementById('url');
 const submitBtn = document.getElementById('submitBtn');
+const openInChrome = document.getElementById('openInChrome');
 const progress = document.getElementById('progress');
 const bar = document.getElementById('bar');
 const toasts = document.getElementById('toasts');
@@ -193,7 +197,8 @@ form.onsubmit = async () => {
   submitBtn.disabled = true;
   submitBtn.value = 'Working…';
   try {
-    const resp = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, apiKey }) });
+    const mode = openInChrome.checked ? 'cdp' : 'headless';
+    const resp = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, apiKey, mode }) });
     const data = await resp.json();
     if (data.ok) {
       showToast('✅ Submitted successfully');
