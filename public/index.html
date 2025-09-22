@@ -6,16 +6,108 @@
 <style>
 body { font-family: Arial; text-align: center; margin-top: 50px; }
 input[type=text] { width: 400px; padding: 10px; }
-input[type=submit] { padding: 10px 20px; }
+input[type=submit], button { padding: 10px 20px; cursor: pointer; }
+.modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
+.card { background: #fff; padding: 20px; border-radius: 8px; width: 520px; text-align: left; }
+.row { margin: 10px 0; }
+.hidden { display: none; }
+.ok { color: #0a7d00; font-weight: bold; }
+.err { color: #b00020; font-weight: bold; }
 </style>
 </head>
 <body>
+<div id="apiModal" class="modal">
+  <div class="card">
+    <h2>Connect Gemini API</h2>
+    <p>Paste your Gemini API key. Get one from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
+    <div class="row">
+      <input id="apiKey" type="text" placeholder="GEMINI_API_KEY" style="width:100%; padding:10px;">
+    </div>
+    <div class="row" id="keyStatus"></div>
+    <div class="row" style="text-align:right">
+      <button id="checkBtn">Connect</button>
+    </div>
+  </div>
+  </div>
+
 <h1>Google Form Auto Filler</h1>
-<form method="POST" action="/submit">
-<input type="text" name="url" placeholder="Enter Google Form URL" required>
-<br><br>
-<input type="submit" value="Fill Form">
+<form id="form" onsubmit="return false;">
+  <input id="url" type="text" placeholder="Enter Google Form URL" required>
+  <br><br>
+  <input id="submitBtn" type="submit" value="Fill Form" disabled>
 </form>
+
+<script>
+let apiKey = '';
+
+const modal = document.getElementById('apiModal');
+const apiKeyInput = document.getElementById('apiKey');
+const keyStatus = document.getElementById('keyStatus');
+const checkBtn = document.getElementById('checkBtn');
+const form = document.getElementById('form');
+const urlInput = document.getElementById('url');
+const submitBtn = document.getElementById('submitBtn');
+
+// Load saved key from localStorage
+try {
+  const saved = localStorage.getItem('geminiApiKey');
+  if (saved && saved.trim()) {
+    apiKey = saved.trim();
+    apiKeyInput.value = '••••-saved';
+    submitBtn.disabled = false;
+    modal.classList.add('hidden');
+  }
+} catch (_) {}
+
+checkBtn.onclick = async () => {
+  const key = apiKeyInput.value.trim();
+  keyStatus.textContent = '';
+  if (!key) {
+    keyStatus.innerHTML = '<span class="err">Please paste your Gemini API key.</span>';
+    return;
+  }
+  checkBtn.disabled = true;
+  keyStatus.innerHTML = 'Checking…';
+  try {
+    const resp = await fetch('/check-key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: key }) });
+    const data = await resp.json();
+    if (data.ok) {
+      apiKey = key;
+      try { localStorage.setItem('geminiApiKey', apiKey); } catch (_) {}
+      keyStatus.innerHTML = '<span class="ok">Connected. API key works.</span>';
+      submitBtn.disabled = false;
+      setTimeout(()=>{ modal.classList.add('hidden'); }, 700);
+    } else {
+      keyStatus.innerHTML = '<span class="err">' + (data.error || 'Invalid key') + '</span>';
+    }
+  } catch (e) {
+    keyStatus.innerHTML = '<span class="err">' + e.message + '</span>';
+  } finally {
+    checkBtn.disabled = false;
+  }
+};
+
+form.onsubmit = async () => {
+  const url = urlInput.value.trim();
+  if (!url) return;
+  submitBtn.disabled = true;
+  submitBtn.value = 'Working…';
+  try {
+    const resp = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, apiKey }) });
+    const data = await resp.json();
+    if (data.ok) {
+      alert('✅ Submitted successfully.');
+    } else {
+      alert('❌ ' + (data.error || 'Failed'));
+    }
+  } catch (e) {
+    alert('❌ ' + e.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.value = 'Fill Form';
+  }
+};
+</script>
 </body>
 </html> 
 

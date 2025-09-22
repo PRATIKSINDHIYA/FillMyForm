@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:headless": "cross-env BROWSER_MODE=headless node server.js",
     "postinstall": "npx playwright install --with-deps"
   },
 
@@ -14,6 +15,7 @@
   "type": "commonjs",
   "dependencies": {
     "@google/genai": "^1.20.0",
+    "cross-env": "^7.0.3",
     "body-parser": "^2.2.0",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
