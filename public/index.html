@@ -4,15 +4,31 @@
 <meta charset="UTF-8">
 <title>Google Form Auto Filler</title>
 <style>
-body { font-family: Arial; text-align: center; margin-top: 50px; }
-input[type=text] { width: 400px; padding: 10px; }
-input[type=submit], button { padding: 10px 20px; cursor: pointer; }
+body { font-family: Arial, Helvetica, sans-serif; background: #0b0f19; color: #e6e6e6; margin: 0; }
+.container { max-width: 880px; margin: 0 auto; padding: 40px 20px; }
+.hero { text-align: center; margin-bottom: 24px; }
+.panel { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+input[type=text] { width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid #374151; background: #0f172a; color: #e5e7eb; outline: none; }
+input[type=text]::placeholder { color: #6b7280; }
+input[type=submit], button { padding: 10px 16px; cursor: pointer; border-radius: 8px; border: 1px solid #2563eb; background: #2563eb; color: white; }
+input[type=submit][disabled], button[disabled] { opacity: 0.6; cursor: not-allowed; }
 .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
-.card { background: #fff; padding: 20px; border-radius: 8px; width: 520px; text-align: left; }
+.card { background: #0f172a; border: 1px solid #1f2937; padding: 20px; border-radius: 12px; width: 520px; text-align: left; }
 .row { margin: 10px 0; }
 .hidden { display: none; }
-.ok { color: #0a7d00; font-weight: bold; }
-.err { color: #b00020; font-weight: bold; }
+.ok { color: #34d399; font-weight: 600; }
+.err { color: #f87171; font-weight: 600; }
+.grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.actions { display: flex; gap: 10px; justify-content: flex-end; }
+.subtle { color: #9ca3af; }
+.progress { height: 8px; background: #1f2937; border-radius: 999px; overflow: hidden; margin-top: 14px; }
+.bar { height: 100%; width: 0%; background: linear-gradient(90deg, #60a5fa, #34d399); transition: width 0.3s ease; }
+.toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+.toast { background: #111827; border: 1px solid #1f2937; color: #e5e7eb; padding: 12px 14px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+.list { display: grid; gap: 8px; }
+.item { background: #0f172a; border: 1px solid #1f2937; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+.item button { background: transparent; border-color: #374151; }
+a { color: #93c5fd; }
 </style>
 </head>
 <body>
@@ -30,12 +46,35 @@ input[type=submit], button { padding: 10px 20px; cursor: pointer; }
   </div>
   </div>
 
-<h1>Google Form Auto Filler</h1>
-<form id="form" onsubmit="return false;">
-  <input id="url" type="text" placeholder="Enter Google Form URL" required>
-  <br><br>
-  <input id="submitBtn" type="submit" value="Fill Form" disabled>
-</form>
+<div class="container">
+  <div class="hero">
+    <h1>FillMyForm</h1>
+    <p class="subtle">Paste your Google Form link. We’ll auto-fill and submit using Gemini.</p>
+  </div>
+  <div class="panel">
+    <form id="form" onsubmit="return false;">
+      <div class="grid">
+        <div>
+          <label class="subtle">Google Form URL</label>
+          <input id="url" type="text" placeholder="https://docs.google.com/forms/.../viewform" required>
+        </div>
+        <div class="actions">
+          <input id="submitBtn" type="submit" value="Fill Form" disabled>
+        </div>
+      </div>
+      <div class="progress hidden" id="progress"><div class="bar" id="bar"></div></div>
+    </form>
+  </div>
+
+  <div style="height: 16px"></div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Recent forms</h3>
+    <div id="recent" class="list"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
 
 <script>
 let apiKey = '';
@@ -47,6 +86,55 @@ const checkBtn = document.getElementById('checkBtn');
 const form = document.getElementById('form');
 const urlInput = document.getElementById('url');
 const submitBtn = document.getElementById('submitBtn');
+const progress = document.getElementById('progress');
+const bar = document.getElementById('bar');
+const toasts = document.getElementById('toasts');
+const recent = document.getElementById('recent');
+
+function showToast(message) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  toasts.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 3500);
+}
+
+function setProgress(active) {
+  if (active) {
+    progress.classList.remove('hidden');
+    bar.style.width = '15%';
+    setTimeout(()=>{ bar.style.width = '45%'; }, 300);
+  } else {
+    bar.style.width = '100%';
+    setTimeout(()=>{ progress.classList.add('hidden'); bar.style.width = '0%'; }, 400);
+  }
+}
+
+function loadHistory() {
+  recent.innerHTML = '';
+  let items = [];
+  try { items = JSON.parse(localStorage.getItem('recentForms') || '[]'); } catch (_) {}
+  items.slice(0,5).forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    const a = document.createElement('a');
+    a.href = u; a.textContent = u; a.target = '_blank';
+    const btn = document.createElement('button');
+    btn.textContent = 'Use';
+    btn.onclick = () => { urlInput.value = u; showToast('URL loaded'); };
+    row.appendChild(a); row.appendChild(btn);
+    recent.appendChild(row);
+  });
+}
+
+function addToHistory(u) {
+  try {
+    let items = JSON.parse(localStorage.getItem('recentForms') || '[]');
+    items = [u, ...items.filter(x => x !== u)];
+    localStorage.setItem('recentForms', JSON.stringify(items.slice(0,10)));
+  } catch (_) {}
+  loadHistory();
+}
 
 // Load saved key from localStorage
 try {
@@ -106,17 +194,25 @@ form.onsubmit = async () => {
     const resp = await fetch('/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, apiKey }) });
     const data = await resp.json();
     if (data.ok) {
-      alert('✅ Submitted successfully.');
+      showToast('✅ Submitted successfully');
+      addToHistory(url);
     } else {
-      alert('❌ ' + (data.error || 'Failed'));
+      showToast('❌ ' + (data.error || 'Failed'));
     }
   } catch (e) {
-    alert('❌ ' + e.message);
+    showToast('❌ ' + e.message);
   } finally {
     submitBtn.disabled = false;
     submitBtn.value = 'Fill Form';
+    setProgress(false);
   }
 };
+
+// Hook progress on submit button clicks
+submitBtn.addEventListener('click', () => setProgress(true));
+
+// Initial load
+loadHistory();
 </script>
 </body>
 </html> 
