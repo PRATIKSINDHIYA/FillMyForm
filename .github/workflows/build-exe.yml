@@ -1,0 +1,59 @@
+name: Build Windows Executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Install pkg globally
+      run: npm install -g pkg
+    
+    - name: Build executable
+      run: |
+        pkg . --targets node18-win-x64 --output fillmyform.exe
+        echo "fillmyform.exe" > release-files.txt
+    
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: fillmyform.exe
+        tag_name: ${{ github.ref_name }}
+        name: FillMyForm Desktop v${{ github.ref_name }}
+        body: |
+          ## FillMyForm Desktop App
+          
+          Download and run `fillmyform.exe` - no installation needed!
+          
+          ### How to use:
+          1. Download `fillmyform.exe`
+          2. Double-click to run
+          3. Open http://localhost:3000 in your browser
+          4. Paste your Gemini API key
+          5. Paste Google Form URL and click Fill Form
+          
+          ### Features:
+          - No Chrome command needed
+          - Works offline
+          - Auto-fills and submits forms
+          - Modern UI with progress tracking
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
