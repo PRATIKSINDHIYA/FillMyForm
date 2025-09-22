@@ -67,6 +67,123 @@
 
 
 
+// require('dotenv').config();
+// const { chromium } = require('playwright');
+// const { GoogleGenAI } = require('@google/genai');
+// const stringSimilarity = require('string-similarity');
+
+// async function askAI(question, options, apiKey) {
+//   const ai = new GoogleGenAI({ apiKey: apiKey });
+
+//   const prompt = `
+// Question: ${question}
+
+// Options:
+// ${options.map((o, i) => `${i + 1}) ${o}`).join('\n')}
+
+// Choose the most appropriate option. Reply only with the exact option text.
+//   `.trim();
+
+//   try {
+//     const response = await ai.models.generateContent({
+//       model: "gemini-2.0-flash",  // Using a more available model
+//       contents: prompt,
+//     });
+//     return response.text.trim();
+//   } catch (error) {
+//     console.error('AI Error:', error);
+//     // Fallback: choose first option if AI fails
+//     return options[0];
+//   }
+// }
+
+// async function runFormAutomation(url) {
+//   let browser;
+//   try {
+//     // Launch browser with visible UI (for debugging)
+//     browser = await chromium.launch({ 
+//       headless: false,
+//       args: ['--no-sandbox', '--disable-setuid-sandbox']
+//     });
+    
+//     const page = await browser.newPage();
+//     await page.goto(url);
+//     await page.waitForTimeout(3000);
+
+//     // Extract questions and options
+//     const questions = await page.$$eval(
+//       'div[role="listitem"]',
+//       (blocks) => {
+//         return blocks.map(block => {
+//           const qText = block.querySelector('[role="heading"]')?.innerText || "";
+//           const opts = Array.from(block.querySelectorAll('label span'))
+//             .map(el => el.innerText)
+//             .filter(text => text && text.trim().length > 0);
+//           return { question: qText, options: opts };
+//         }).filter(q => q.question && q.options.length > 0);
+//       }
+//     );
+
+//     console.log(`Found ${questions.length} questions`);
+
+//     // Get API key from environment (set in the route)
+//     const apiKey = process.env.GEMINI_API_KEY;
+
+//     // Answer each question using AI
+//     for (const q of questions) {
+//       console.log(`Question: ${q.question}`);
+//       console.log(`Options: ${q.options.join(', ')}`);
+      
+//       const ans = await askAI(q.question, q.options, apiKey);
+//       console.log(`AI Answer: ${ans}`);
+      
+//       const match = stringSimilarity.findBestMatch(ans, q.options);
+//       const bestMatch = q.options[match.bestMatchIndex];
+//       console.log(`Best Match: ${bestMatch}`);
+
+//       // Click the matching option
+//       await page.evaluate((optionText) => {
+//         const labels = Array.from(document.querySelectorAll('label'));
+//         const targetLabel = labels.find(label => {
+//           const span = label.querySelector('span');
+//           return span && span.innerText.trim() === optionText.trim();
+//         });
+//         if (targetLabel) {
+//           targetLabel.click();
+//         }
+//       }, bestMatch);
+      
+//       await page.waitForTimeout(1000);
+//     }
+
+//     // Submit the form
+//     await page.evaluate(() => {
+//       const submitButtons = Array.from(document.querySelectorAll('div[role="button"]'));
+//       const submitBtn = submitButtons.find(btn => 
+//         btn.innerText && btn.innerText.toLowerCase().includes('submit')
+//       );
+//       if (submitBtn) {
+//         submitBtn.click();
+//       }
+//     });
+
+//     await page.waitForTimeout(3000);
+//     console.log('Form submitted successfully!');
+
+//   } catch (error) {
+//     console.error('Automation error:', error);
+//     throw error;
+//   } finally {
+//     if (browser) {
+//       await browser.close();
+//     }
+//   }
+// }
+
+// module.exports = { runFormAutomation };
+
+
+
 require('dotenv').config();
 const { chromium } = require('playwright');
 const { GoogleGenAI } = require('@google/genai');
@@ -86,31 +203,38 @@ Choose the most appropriate option. Reply only with the exact option text.
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",  // Using a more available model
+      model: "gemini-2.0-flash",
       contents: prompt,
     });
     return response.text.trim();
   } catch (error) {
     console.error('AI Error:', error);
-    // Fallback: choose first option if AI fails
-    return options[0];
+    return options[0]; // Fallback to first option
   }
 }
 
 async function runFormAutomation(url) {
   let browser;
   try {
-    // Launch browser with visible UI (for debugging)
+    // RENDER के लिए HEADLESS mode में launch करें
     browser = await chromium.launch({ 
-      headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      headless: true,  // ✅ IMPORTANT: Render पर headless true रखें
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
     });
     
     const page = await browser.newPage();
-    await page.goto(url);
+    await page.goto(url, { waitUntil: 'networkidle' });
     await page.waitForTimeout(3000);
 
-    // Extract questions and options
+    // Questions extract करें
     const questions = await page.$$eval(
       'div[role="listitem"]',
       (blocks) => {
@@ -126,22 +250,17 @@ async function runFormAutomation(url) {
 
     console.log(`Found ${questions.length} questions`);
 
-    // Get API key from environment (set in the route)
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // Answer each question using AI
-    for (const q of questions) {
-      console.log(`Question: ${q.question}`);
-      console.log(`Options: ${q.options.join(', ')}`);
+    // Each question answer करें
+    for (const [index, q] of questions.entries()) {
+      console.log(`Processing question ${index + 1}/${questions.length}`);
       
       const ans = await askAI(q.question, q.options, apiKey);
-      console.log(`AI Answer: ${ans}`);
-      
       const match = stringSimilarity.findBestMatch(ans, q.options);
       const bestMatch = q.options[match.bestMatchIndex];
-      console.log(`Best Match: ${bestMatch}`);
 
-      // Click the matching option
+      // Option select करें
       await page.evaluate((optionText) => {
         const labels = Array.from(document.querySelectorAll('label'));
         const targetLabel = labels.find(label => {
@@ -156,7 +275,7 @@ async function runFormAutomation(url) {
       await page.waitForTimeout(1000);
     }
 
-    // Submit the form
+    // Form submit करें
     await page.evaluate(() => {
       const submitButtons = Array.from(document.querySelectorAll('div[role="button"]'));
       const submitBtn = submitButtons.find(btn => 
@@ -167,11 +286,11 @@ async function runFormAutomation(url) {
       }
     });
 
-    await page.waitForTimeout(3000);
-    console.log('Form submitted successfully!');
+    await page.waitForTimeout(5000);
+    console.log('✅ Form submitted successfully!');
 
   } catch (error) {
-    console.error('Automation error:', error);
+    console.error('❌ Automation error:', error);
     throw error;
   } finally {
     if (browser) {
