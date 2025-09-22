@@ -90,6 +90,16 @@ checkBtn.onclick = async () => {
 form.onsubmit = async () => {
   const url = urlInput.value.trim();
   if (!url) return;
+  try {
+    const u = new URL(url);
+    if (!/docs\.google\.com$/.test(u.hostname) || !/\/forms\//.test(u.pathname)) {
+      alert('Please paste a valid Google Forms URL.');
+      return;
+    }
+  } catch (_) {
+    alert('Invalid URL format.');
+    return;
+  }
   submitBtn.disabled = true;
   submitBtn.value = 'Working…';
   try {

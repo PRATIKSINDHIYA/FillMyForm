@@ -30,13 +30,21 @@ app.post('/submit', async (req, res) => {
   const { url, apiKey } = req.body || {};
   if (!url) return res.status(400).json({ ok: false, error: 'Please provide a Google Form URL.' });
   if (!apiKey) return res.status(400).json({ ok: false, error: 'Please provide Gemini API key.' });
+  try {
+    const u = new URL(url);
+    if (!/docs\.google\.com$/.test(u.hostname) || !/\/forms\//.test(u.pathname)) {
+      return res.status(400).json({ ok: false, error: 'Please paste a valid Google Forms URL.' });
+    }
+  } catch (_) {
+    return res.status(400).json({ ok: false, error: 'Invalid URL format.' });
+  }
 
   try {
     const result = await runFormAutomation(url, apiKey);
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: err.message || 'Server error' });
   }
 });
 

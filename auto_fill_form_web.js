@@ -37,10 +37,26 @@ Choose the best option. Reply only with the option text.
   `.trim();
 
   const ai = createAIClient(apiKey);
-  const result = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
-    contents: [{ role: "user", parts: [{ text: prompt }] }]
-  });
+  async function callOnce() {
+    return ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    });
+  }
+  let result;
+  try {
+    result = await callOnce();
+  } catch (e) {
+    const msg = e && e.message ? e.message : '';
+    const m = msg.match(/Please retry in\s+(\d+(?:\.\d+)?)s/);
+    if (e.status === 429 && m) {
+      const delayMs = Math.min(60000, Math.ceil(parseFloat(m[1]) * 1000));
+      await new Promise(r => setTimeout(r, delayMs));
+      result = await callOnce();
+    } else {
+      throw e;
+    }
+  }
   const text = extractTextFromGenAIResponse(result).trim();
   return text;
 }
