@@ -84,6 +84,17 @@ async function runFormAutomation(url, apiKey) {
   await page.goto(url);
   await page.waitForTimeout(2000);
 
+  // Handle Google consent/cookies if shown
+  try {
+    await page.waitForSelector('button:has-text("I agree"), button:has-text("Accept all"), div[role="button"]:has-text("I agree"), div[role="button"]:has-text("Accept all")', { timeout: 4000 });
+    await page.evaluate(() => {
+      const candidates = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      const btn = candidates.find(b => /i agree|accept all/i.test(b.textContent || ''));
+      if (btn) btn.click();
+    });
+    await page.waitForTimeout(1000);
+  } catch (_) {}
+
   const questions = await page.$$eval(
     'div[role="listitem"]',
     (blocks) => {

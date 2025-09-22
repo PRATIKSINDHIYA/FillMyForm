@@ -32,7 +32,9 @@ app.post('/submit', async (req, res) => {
   if (!apiKey) return res.status(400).json({ ok: false, error: 'Please provide Gemini API key.' });
   try {
     const u = new URL(url);
-    if (!/docs\.google\.com$/.test(u.hostname) || !/\/forms\//.test(u.pathname)) {
+    const isDocs = /docs\.google\.com$/.test(u.hostname) && /\/forms\//.test(u.pathname);
+    const isShort = /forms\.gle$/.test(u.hostname);
+    if (!isDocs && !isShort) {
       return res.status(400).json({ ok: false, error: 'Please paste a valid Google Forms URL.' });
     }
   } catch (_) {

@@ -180,7 +180,9 @@ form.onsubmit = async () => {
   if (!url) return;
   try {
     const u = new URL(url);
-    if (!/docs\.google\.com$/.test(u.hostname) || !/\/forms\//.test(u.pathname)) {
+    const isDocs = /docs\.google\.com$/.test(u.hostname) && /\/forms\//.test(u.pathname);
+    const isShort = /forms\.gle$/.test(u.hostname);
+    if (!isDocs && !isShort) {
       alert('Please paste a valid Google Forms URL.');
       return;
     }
