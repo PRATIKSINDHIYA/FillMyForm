@@ -1,0 +1,18 @@
+{
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "node_modules/@google/genai/**/*",
+      "node_modules/playwright/**/*",
+      "node_modules/string-similarity/**/*",
+      "node_modules/express/**/*",
+      "node_modules/body-parser/**/*",
+      "node_modules/dotenv/**/*",
+      "node_modules/cross-env/**/*"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  }
+}
