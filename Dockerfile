@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/playwright:v1.55.0-jammy
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npx playwright install --with-deps
+RUN npm install --omit=dev && npx playwright install --with-deps
 
 COPY . .
 
